@@ -1,0 +1,207 @@
+{
+  "entities": {
+    "Organization": {
+      "title": "Organization",
+      "description": "A multi-tenant organization.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "logo": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "ownerId"]
+    },
+    "UserOrganizationMapping": {
+      "title": "UserOrganizationMapping",
+      "description": "Mapping of users to organizations.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "role": { "type": "string", "enum": ["owner", "admin", "manager", "member"] },
+        "joinedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "organizationId", "role"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "An invitation to join an organization.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "organizationId": { "type": "string" },
+        "organizationName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "manager", "member"] },
+        "status": { "type": "string", "enum": ["Pending", "Accepted", "Rejected", "Expired"] },
+        "token": { "type": "string" },
+        "invitedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "organizationId", "role", "status", "token"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "photoURL": { "type": "string" },
+        "currentOrganizationId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "email"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A project managed within the application.",
+      "type": "object",
+      "properties": {
+        "organizationId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "startDate": { "type": "string", "format": "date-time" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Not Started", "In Progress", "Completed", "On Hold"] },
+        "members": { "type": "array", "items": { "type": "string" } },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["organizationId", "name", "status", "ownerId", "members"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "A task within a project.",
+      "type": "object",
+      "properties": {
+        "organizationId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "assignedUserId": { "type": "string" },
+        "priority": { "type": "string", "enum": ["Low", "Medium", "High", "Critical"] },
+        "statusId": { "type": "string" },
+        "completionPercentage": { "type": "number" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "isBilled": { "type": "boolean" },
+        "milestoneId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["organizationId", "projectId", "name", "statusId", "priority"]
+    },
+    "OrganizationSettings": {
+      "title": "OrganizationSettings",
+      "description": "Configuration settings for an organization.",
+      "type": "object",
+      "properties": {
+        "theme": { "type": "string", "enum": ["light", "dark"] },
+        "primaryColor": { "type": "string" },
+        "layout": { "type": "string", "enum": ["standard", "compact"] },
+        "enabledModules": {
+          "type": "object",
+          "properties": {
+            "issues": { "type": "boolean" },
+            "timeLogs": { "type": "boolean" },
+            "forums": { "type": "boolean" },
+            "milestones": { "type": "boolean" },
+            "documents": { "type": "boolean" }
+          }
+        },
+        "projectDefaults": {
+          "type": "object",
+          "properties": {
+            "autoAssignOwner": { "type": "boolean" },
+            "defaultStatusId": { "type": "string" }
+          }
+        },
+        "userManagement": {
+          "type": "object",
+          "properties": {
+            "defaultInviteRole": { "type": "string" },
+            "allowSelfRegistration": { "type": "boolean" }
+          }
+        },
+        "taskFieldsVisibility": {
+          "type": "object",
+          "properties": {
+            "priority": { "type": "boolean" },
+            "dueDate": { "type": "boolean" },
+            "tags": { "type": "boolean" },
+            "completionPercentage": { "type": "boolean" }
+          }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "TaskStatusConfig": {
+      "title": "TaskStatusConfig",
+      "description": "Custom task status configuration.",
+      "type": "object",
+      "properties": {
+        "organizationId": { "type": "string" },
+        "name": { "type": "string" },
+        "color": { "type": "string" },
+        "type": { "type": "string", "enum": ["Open", "InProgress", "Completed"] },
+        "order": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["organizationId", "name", "type", "order"]
+    },
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "Personal preferences for a user.",
+      "type": "object",
+      "properties": {
+        "defaultView": { "type": "string", "enum": ["List", "Kanban"] },
+        "timeFormat": { "type": "string", "enum": ["12h", "24h"] },
+        "language": { "type": "string" },
+        "notifications": {
+          "type": "object",
+          "properties": {
+            "email": { "type": "boolean" },
+            "inApp": { "type": "boolean" },
+            "events": {
+              "type": "object",
+              "properties": {
+                "taskAssigned": { "type": "boolean" },
+                "statusChanged": { "type": "boolean" },
+                "dueDateReminder": { "type": "boolean" }
+              }
+            }
+          }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Subtask": {
+      "title": "Subtask",
+      "description": "A subtask within a task.",
+      "type": "object",
+      "properties": {
+        "taskId": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["To Do", "Completed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["taskId", "name", "status"]
+    }
+  },
+  "firestore": {
+    "/organizations/{orgId}": { "schema": "Organization", "description": "Organizations" },
+    "/userOrganizationMappings/{mappingId}": { "schema": "UserOrganizationMapping", "description": "User-Org mappings" },
+    "/invitations/{invitationId}": { "schema": "Invitation", "description": "Organization invitations" },
+    "/users/{uid}": { "schema": "User", "description": "User profiles" },
+    "/projects/{projectId}": { "schema": "Project", "description": "Projects" },
+    "/projects/{projectId}/tasks/{taskId}": { "schema": "Task", "description": "Tasks within a project" },
+    "/organizationSettings/{orgId}": { "schema": "OrganizationSettings", "description": "Organization settings" },
+    "/taskStatuses/{statusId}": { "schema": "TaskStatusConfig", "description": "Custom task statuses" },
+    "/userPreferences/{uid}": { "schema": "UserPreferences", "description": "User personal preferences" },
+    "/subtasks/{subtaskId}": { "schema": "Subtask", "description": "Subtasks" }
+  }
+}
