@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -7,6 +8,7 @@ import admin from "firebase-admin";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import cors from "cors";
 import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,47 +24,83 @@ if (admin.apps.length === 0) {
 // Use the specific database ID if provided
 const firestore = getFirestore(admin.app(), "ai-studio-4376c764-5cba-402c-a7e9-919c3f1d5f1c");
 
-// Initialize Resend
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-
+// Dynamic email sending via Gmail SMTP or Resend API
 async function sendInvitationEmail(name: string, email: string, inviteLink: string, organizationName: string, invitedByName: string) {
-  if (!resend) {
-    console.warn("Resend API Key not configured. Skipping email send.");
-    return false;
-  }
+  const rawGmailUser = process.env.GMAIL_USER || "";
+  const rawGmailPass = process.env.GMAIL_APP_PASS || "";
+  const gmailUser = rawGmailUser.replace(/['"]/g, "").trim();
+  const gmailPass = rawGmailPass.replace(/['"\s]/g, "").trim();
+  const resendApiKey = (process.env.RESEND_API_KEY || "").replace(/['"]/g, "").trim();
 
-  try {
-    const { data, error } = await resend.emails.send({
-      from: 'Acme <onboarding@resend.dev>', // Resend default for testing
-      to: email,
-      subject: `You are invited to join ${organizationName}`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-          <h2 style="color: #4f46e5;">You're Invited!</h2>
-          <p>Hello <strong>${name}</strong>,</p>
-          <p>You have been invited to join <strong>${organizationName}</strong> by ${invitedByName}.</p>
-          <div style="margin: 30px 0;">
-            <a href="${inviteLink}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Accept Invitation</a>
-          </div>
-          <p style="color: #666; font-size: 14px;">If the button above doesn't work, copy and paste this link into your browser:</p>
-          <p style="color: #666; font-size: 14px; word-break: break-all;">${inviteLink}</p>
-          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="color: #999; font-size: 12px;">This invitation was sent from your project management application.</p>
-        </div>
-      `,
-    });
+  const emailHtml = `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+      <h2 style="color: #4f46e5;">You're Invited!</h2>
+      <p>Hello <strong>${name}</strong>,</p>
+      <p>You have been invited to join <strong>${organizationName}</strong> by ${invitedByName}.</p>
+      <div style="margin: 30px 0;">
+        <a href="${inviteLink}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Accept Invitation</a>
+      </div>
+      <p style="color: #666; font-size: 14px;">If the button above doesn't work, copy and paste this link into your browser:</p>
+      <p style="color: #666; font-size: 14px; word-break: break-all;">${inviteLink}</p>
+      <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+      <p style="color: #999; font-size: 12px;">This invitation was sent from your project management application.</p>
+    </div>
+  `;
 
-    if (error) {
-      console.error("Resend API Error:", error);
-      throw error;
+  // 1. Try Gmail SMTP if GMAIL_USER and GMAIL_APP_PASS are configured
+  if (gmailUser && gmailPass) {
+    try {
+      console.log(`Sending email to ${email} via Gmail SMTP (${gmailUser})...`);
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: gmailUser,
+          pass: gmailPass,
+        },
+      });
+
+      await transporter.sendMail({
+        from: `"${organizationName}" <${gmailUser}>`,
+        to: email,
+        subject: `You are invited to join ${organizationName}`,
+        html: emailHtml,
+      });
+
+      console.log(`Email successfully sent to ${email} via Gmail SMTP.`);
+      return true;
+    } catch (gmailError) {
+      console.error("Gmail SMTP Error:", gmailError);
+      // Fall through to Resend if configured
     }
-
-    console.log(`Email successfully sent to ${email} via Resend. ID: ${data?.id}`);
-    return true;
-  } catch (error) {
-    console.error("Error sending email via Resend:", error);
-    throw error;
   }
+
+  // 2. Try Resend API if RESEND_API_KEY is configured
+  if (resendApiKey) {
+    try {
+      console.log(`Sending email to ${email} via Resend API...`);
+      const resend = new Resend(resendApiKey);
+      const { data, error } = await resend.emails.send({
+        from: 'Acme <onboarding@resend.dev>',
+        to: email,
+        subject: `You are invited to join ${organizationName}`,
+        html: emailHtml,
+      });
+
+      if (error) {
+        console.error("Resend API Error:", error);
+        return false;
+      }
+
+      console.log(`Email successfully sent to ${email} via Resend. ID: ${data?.id}`);
+      return true;
+    } catch (resendError) {
+      console.error("Error sending email via Resend:", resendError);
+      return false;
+    }
+  }
+
+  console.warn("Neither Gmail credentials (GMAIL_USER + GMAIL_APP_PASS) nor RESEND_API_KEY are configured.");
+  return false;
 }
 
 async function startServer() {

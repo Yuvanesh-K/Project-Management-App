@@ -25,7 +25,10 @@ import {
   EyeOff,
   Lock,
   Globe,
-  Briefcase
+  Briefcase,
+  Copy,
+  Check,
+  Link2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -122,6 +125,15 @@ const OrganizationSettingsView: React.FC = () => {
   const [localUserPrefs, setLocalUserPrefs] = useState<UserPreferences | null>(null);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [newInvite, setNewInvite] = useState({ email: '', role: 'member' as UserRole });
+  const [createdInviteModal, setCreatedInviteModal] = useState<{ email: string; link: string } | null>(null);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
+
+  const handleCopyLink = (link: string, id: string) => {
+    navigator.clipboard.writeText(link);
+    setCopiedInviteId(id);
+    toast.success('Invitation link copied to clipboard!');
+    setTimeout(() => setCopiedInviteId(null), 3000);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -355,27 +367,66 @@ const OrganizationSettingsView: React.FC = () => {
   const handleSendInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization || !user) return;
+    const inviteEmail = newInvite.email.trim();
+    if (!inviteEmail) return;
+
+    const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const inviteLink = `${window.location.origin}/accept-invite?token=${token}`;
+
     try {
       const docRef = await addDoc(collection(db, 'invitations'), {
-        ...newInvite,
+        email: inviteEmail,
+        role: newInvite.role,
         organizationId: organization.id,
         organizationName: organization.name,
         status: 'Pending',
         invitedBy: user.uid,
-        token: Math.random().toString(36).substring(2, 15),
+        token,
         createdAt: serverTimestamp()
       });
+
+      // Trigger backend server to send email via Gmail SMTP / Resend
+      let emailSent = false;
+      try {
+        const response = await fetch('/api/send-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: inviteEmail.split('@')[0],
+            email: inviteEmail,
+            inviteLink,
+            organizationName: organization.name,
+            invitedByName: user.displayName || 'An admin'
+          })
+        });
+        const data = await response.json();
+        if (data.success) {
+          emailSent = true;
+        }
+      } catch (err) {
+        console.error("Failed to trigger backend email:", err);
+      }
 
       await logActivity(
         organization.id,
         docRef.id,
         'invitation',
         'User Invited',
-        `Invitation sent to ${newInvite.email} by ${user.displayName}`
+        `Invitation sent to ${inviteEmail} by ${user.displayName}`
       );
 
       setNewInvite({ email: '', role: 'member' });
-      toast.success('Invitation sent');
+
+      if (emailSent) {
+        toast.success(`Invitation email sent to ${inviteEmail}`);
+      } else {
+        toast.warning(`Invitation created! Email could not be delivered automatically. Use the generated link.`);
+      }
+
+      setCreatedInviteModal({
+        email: inviteEmail,
+        link: inviteLink
+      });
     } catch (error) {
       toast.error('Failed to send invitation');
     }
@@ -383,11 +434,34 @@ const OrganizationSettingsView: React.FC = () => {
 
   const handleResendInvite = async (invitation: Invitation) => {
     if (!organization || !user) return;
+    const inviteLink = `${window.location.origin}/accept-invite?token=${invitation.token}`;
+
     try {
       await updateDoc(doc(db, 'invitations', invitation.id), {
         createdAt: serverTimestamp(),
         status: 'Pending'
       });
+
+      let emailSent = false;
+      try {
+        const response = await fetch('/api/send-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: invitation.email.split('@')[0],
+            email: invitation.email,
+            inviteLink,
+            organizationName: organization.name,
+            invitedByName: user.displayName || 'An admin'
+          })
+        });
+        const data = await response.json();
+        if (data.success) {
+          emailSent = true;
+        }
+      } catch (err) {
+        console.error("Failed to trigger backend email:", err);
+      }
 
       await logActivity(
         organization.id,
@@ -397,7 +471,16 @@ const OrganizationSettingsView: React.FC = () => {
         `Invitation to ${invitation.email} was resent by ${user.displayName}`
       );
 
-      toast.success('Invitation resent');
+      if (emailSent) {
+        toast.success(`Invitation email sent to ${invitation.email}`);
+      } else {
+        toast.warning(`Email delivery failed, but invitation link is ready below.`);
+      }
+
+      setCreatedInviteModal({
+        email: invitation.email,
+        link: inviteLink
+      });
     } catch (error) {
       toast.error('Failed to resend invitation');
     }
@@ -912,12 +995,31 @@ const OrganizationSettingsView: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           <button 
-                            onClick={() => handleResendInvite(invite)}
-                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all flex items-center gap-2 text-xs font-bold"
-                            title="Resend Invitation"
+                            onClick={() => handleCopyLink(`${window.location.origin}/accept-invite?token=${invite.token}`, invite.id)}
+                            className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+                            title="Copy invitation link directly"
                           >
-                            <RefreshCw size={16} />
-                            Resend
+                            {copiedInviteId === invite.id ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                            {copiedInviteId === invite.id ? 'Copied!' : 'Copy Link'}
+                          </button>
+                          <button 
+                            onClick={() => setCreatedInviteModal({
+                              email: invite.email,
+                              link: `${window.location.origin}/accept-invite?token=${invite.token}`
+                            })}
+                            className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+                            title="View Link Popup"
+                          >
+                            <Link2 size={14} />
+                            Get Link
+                          </button>
+                          <button 
+                            onClick={() => handleResendInvite(invite)}
+                            className="px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                            title="Resend Email via Gmail / Resend"
+                          >
+                            <RefreshCw size={14} />
+                            Resend Email
                           </button>
                           <button 
                             onClick={async () => {
@@ -996,6 +1098,61 @@ const OrganizationSettingsView: React.FC = () => {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Created Invite Link Modal */}
+      {createdInviteModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="bg-white rounded-3xl shadow-2xl border border-gray-100 max-w-lg w-full overflow-hidden p-8"
+          >
+            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-4">
+              <Link2 size={24} />
+            </div>
+
+            <h3 className="text-xl font-bold text-gray-900">Invitation Link Generated</h3>
+            <p className="text-sm text-gray-500 mt-2">
+              Share this direct link with <strong className="text-gray-800">{createdInviteModal.email}</strong> so they can join your organization.
+            </p>
+
+            <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-2xl flex items-center gap-2">
+              <input 
+                type="text" 
+                readOnly 
+                value={createdInviteModal.link}
+                className="bg-transparent text-xs text-gray-700 font-mono flex-1 outline-none truncate"
+              />
+              <button
+                onClick={() => handleCopyLink(createdInviteModal.link, 'modal-link')}
+                className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition-all flex items-center gap-1.5 shrink-0"
+              >
+                {copiedInviteId === 'modal-link' ? (
+                  <>
+                    <Check size={14} />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy size={14} />
+                    Copy Link
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="mt-8 flex justify-end">
+              <button
+                onClick={() => setCreatedInviteModal(null)}
+                className="px-6 py-2.5 bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold rounded-xl text-sm transition-all"
+              >
+                Done
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };

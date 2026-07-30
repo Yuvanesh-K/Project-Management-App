@@ -8,7 +8,7 @@ import {
   UserPlus, Mail, Trash2, Shield, Loader2, Search, Filter, 
   MoreVertical, X, CheckCircle2, AlertCircle, Clock, 
   Briefcase, CheckSquare, History, User as UserIcon,
-  ChevronRight, Calendar, ExternalLink
+  ChevronRight, Calendar, ExternalLink, Copy, Check, Link2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -25,7 +25,18 @@ const UserManagement: React.FC = () => {
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [isInviting, setIsInviting] = useState(false);
+  const [createdInviteModal, setCreatedInviteModal] = useState<{ email: string; link: string } | null>(null);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const handleCopyLink = (link: string, id?: string) => {
+    navigator.clipboard.writeText(link);
+    if (id) {
+      setCopiedInviteId(id);
+      setTimeout(() => setCopiedInviteId(null), 2000);
+    }
+    toast.success('Invitation link copied to clipboard!');
+  };
   const [filterRole, setFilterRole] = useState<string>('All');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [activeTab, setActiveTab] = useState<'users' | 'invitations'>('users');
@@ -173,25 +184,29 @@ const UserManagement: React.FC = () => {
         throw new Error(data.error || 'Failed to send invitation');
       }
 
+      const targetEmail = inviteEmail;
       setInviteEmail('');
       setInviteName('');
       
       if (data.emailSent) {
-        toast.success(`Invitation sent successfully to ${inviteEmail}`);
+        toast.success(`Invitation email sent to ${targetEmail}`);
       } else {
-        toast.warning(`Invitation saved, but email delivery failed. Please share the link manually.`);
+        toast.warning(`Invitation created! Email could not be sent automatically. Use the link popup to share manually.`);
       }
       
       await logActivity(
         organization.id,
-        inviteEmail,
+        targetEmail,
         'user',
         'User Invited',
-        `Invitation sent to ${inviteName} (${inviteEmail}) by ${currentUser.displayName}`
+        `Invitation sent to ${inviteName} (${targetEmail}) by ${currentUser.displayName}`
       );
 
       if (data.inviteLink) {
-        console.log("Invite Link (for testing):", data.inviteLink);
+        setCreatedInviteModal({
+          email: targetEmail,
+          link: data.inviteLink
+        });
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to send invitation');
@@ -322,7 +337,12 @@ const UserManagement: React.FC = () => {
         `Invitation to ${invite.name || invite.email} was resent by ${currentUser.displayName}`
       );
 
-      toast.success('Invitation resent successfully');
+      if (data.inviteLink) {
+        setCreatedInviteModal({
+          email: invite.email,
+          link: data.inviteLink
+        });
+      }
     } catch (error: any) {
       toast.error(error.message || 'Failed to resend invitation');
     }
@@ -431,29 +451,27 @@ const UserManagement: React.FC = () => {
           <p className="text-gray-500 mt-1">Control access, roles, and permissions for your team.</p>
         </div>
         
-        {canManage && (
-          <div className="flex items-center gap-3">
-            <div className="bg-white p-1 rounded-2xl border border-gray-100 shadow-sm flex">
-              <button 
-                onClick={() => setActiveTab('users')}
-                className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${activeTab === 'users' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-gray-500 hover:text-gray-900'}`}
-              >
-                Users
-              </button>
-              <button 
-                onClick={() => setActiveTab('invitations')}
-                className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${activeTab === 'invitations' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-gray-500 hover:text-gray-900'}`}
-              >
-                Invitations
-                {invitations.filter(i => i.status === 'Pending').length > 0 && (
-                  <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-                    {invitations.filter(i => i.status === 'Pending').length}
-                  </span>
-                )}
-              </button>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="bg-white p-1 rounded-2xl border border-gray-100 shadow-sm flex">
+            <button 
+              onClick={() => setActiveTab('users')}
+              className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${activeTab === 'users' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-gray-500 hover:text-gray-900'}`}
+            >
+              Users
+            </button>
+            <button 
+              onClick={() => setActiveTab('invitations')}
+              className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${activeTab === 'invitations' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-gray-500 hover:text-gray-900'}`}
+            >
+              Invitations
+              {invitations.filter(i => i.status === 'Pending').length > 0 && (
+                <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                  {invitations.filter(i => i.status === 'Pending').length}
+                </span>
+              )}
+            </button>
           </div>
-        )}
+        </div>
       </header>
 
       {activeTab === 'users' ? (
@@ -747,13 +765,35 @@ const UserManagement: React.FC = () => {
                         
                         <div className="flex items-center gap-2">
                           {invite.status === 'Pending' && (
-                            <button 
-                              onClick={() => handleResendInvite(invite)}
-                              className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                              title="Resend Invitation"
-                            >
-                              <History size={18} />
-                            </button>
+                            <>
+                              <button 
+                                onClick={() => handleCopyLink(`${window.location.origin}/accept-invite?token=${invite.token}`, invite.id)}
+                                className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+                                title="Copy invitation link directly"
+                              >
+                                {copiedInviteId === invite.id ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                                {copiedInviteId === invite.id ? 'Copied!' : 'Copy Link'}
+                              </button>
+                              <button 
+                                onClick={() => setCreatedInviteModal({
+                                  email: invite.email,
+                                  link: `${window.location.origin}/accept-invite?token=${invite.token}`
+                                })}
+                                className="px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                                title="View & Copy Invitation Link"
+                              >
+                                <Link2 size={14} />
+                                Get Link
+                              </button>
+                              <button 
+                                onClick={() => handleResendInvite(invite)}
+                                className="px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                                title="Resend Email via Gmail SMTP or Resend API"
+                              >
+                                <History size={14} />
+                                Resend Email
+                              </button>
+                            </>
                           )}
                           <button 
                             onClick={() => handleCancelInvite(invite.id)}
@@ -1008,6 +1048,60 @@ const UserManagement: React.FC = () => {
                     Remove from Org
                   </button>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+        {/* Created Invite Link Modal */}
+        {createdInviteModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-3xl shadow-2xl border border-gray-100 max-w-lg w-full overflow-hidden p-8"
+            >
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-4">
+                <Link2 size={24} />
+              </div>
+
+              <h3 className="text-xl font-bold text-gray-900">Invitation Link Generated</h3>
+              <p className="text-sm text-gray-500 mt-2">
+                Share this direct link with <strong className="text-gray-800">{createdInviteModal.email}</strong> so they can join your organization.
+              </p>
+
+              <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-2xl flex items-center gap-2">
+                <input 
+                  type="text" 
+                  readOnly 
+                  value={createdInviteModal.link}
+                  className="bg-transparent text-xs text-gray-700 font-mono flex-1 outline-none truncate"
+                />
+                <button
+                  onClick={() => handleCopyLink(createdInviteModal.link, 'modal-link')}
+                  className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition-all flex items-center gap-1.5 shrink-0"
+                >
+                  {copiedInviteId === 'modal-link' ? (
+                    <>
+                      <Check size={14} />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={14} />
+                      Copy Link
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="mt-8 flex justify-end">
+                <button
+                  onClick={() => setCreatedInviteModal(null)}
+                  className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-sm transition-all"
+                >
+                  Done
+                </button>
               </div>
             </motion.div>
           </div>
