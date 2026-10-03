@@ -158,20 +158,22 @@ async function startServer() {
       }
       
       // Send Real Email
-      const inviteLink = `${req.headers.origin || process.env.APP_URL || "http://localhost:3000"}/accept-invite?token=${token}`;
+      let baseOrigin = (req.headers.origin as string) || process.env.APP_URL || "https://ais-dev-yvatujghraahowhao436vr-650147493611.asia-east1.run.app";
+      if (baseOrigin.includes("aistudio.google.com")) {
+        baseOrigin = "https://ais-dev-yvatujghraahowhao436vr-650147493611.asia-east1.run.app";
+      }
+      const inviteLink = `${baseOrigin}/accept-invite?token=${token}`;
       
       let emailSent = false;
       try {
         emailSent = await sendInvitationEmail(name, email, inviteLink, organizationName, invitedByName);
       } catch (emailError) {
         console.error("Failed to send real email, but invitation was saved in DB.");
-        // We still return success: true because the invite is in the DB, 
-        // but we might want to inform the user that email delivery failed.
       }
       
       console.log("------------------------------------------");
       console.log(`📧 EMAIL ${!existingInviteQuery.empty ? "RESENT" : "SENT"} TO: ${email}`);
-      console.log(`Status: ${emailSent ? "Delivered via Resend" : "Failed or Simulated"}`);
+      console.log(`Status: ${emailSent ? "Delivered via SMTP/Resend" : "Failed or Simulated"}`);
       console.log(`Subject: You have been invited to join ${organizationName}`);
       console.log(`Accept here: ${inviteLink}`);
       console.log("------------------------------------------");
@@ -186,6 +188,23 @@ async function startServer() {
     } catch (error) {
       console.error("Error sending invitation:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // POST /api/send-invite
+  app.post("/api/send-invite", async (req, res) => {
+    try {
+      const { name, email, inviteLink, organizationName, invitedByName } = req.body;
+      let finalLink = inviteLink;
+      if (!finalLink || finalLink.includes("aistudio.google.com")) {
+        const token = finalLink ? finalLink.split("token=")[1] : "";
+        finalLink = `https://ais-dev-yvatujghraahowhao436vr-650147493611.asia-east1.run.app/accept-invite?token=${token}`;
+      }
+      const emailSent = await sendInvitationEmail(name || email.split('@')[0], email, finalLink, organizationName || 'Organization', invitedByName || 'An admin');
+      res.json({ success: emailSent });
+    } catch (error) {
+      console.error("Error in /api/send-invite:", error);
+      res.status(500).json({ error: "Failed to send invitation email" });
     }
   });
 

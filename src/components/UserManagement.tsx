@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { logActivity } from '../lib/firestore-utils';
+import { logActivity, getInviteBaseUrl } from '../lib/firestore-utils';
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
 const UserManagement: React.FC = () => {
@@ -767,7 +767,7 @@ const UserManagement: React.FC = () => {
                           {invite.status === 'Pending' && (
                             <>
                               <button 
-                                onClick={() => handleCopyLink(`${window.location.origin}/accept-invite?token=${invite.token}`, invite.id)}
+                                onClick={() => handleCopyLink(`${getInviteBaseUrl()}/accept-invite?token=${invite.token}`, invite.id)}
                                 className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
                                 title="Copy invitation link directly"
                               >
@@ -777,7 +777,7 @@ const UserManagement: React.FC = () => {
                               <button 
                                 onClick={() => setCreatedInviteModal({
                                   email: invite.email,
-                                  link: `${window.location.origin}/accept-invite?token=${invite.token}`
+                                  link: `${getInviteBaseUrl()}/accept-invite?token=${invite.token}`
                                 })}
                                 className="px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
                                 title="View & Copy Invitation Link"

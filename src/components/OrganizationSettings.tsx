@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { logActivity } from '../lib/firestore-utils';
+import { logActivity, getInviteBaseUrl } from '../lib/firestore-utils';
 import {
   DndContext,
   closestCenter,
@@ -371,7 +371,7 @@ const OrganizationSettingsView: React.FC = () => {
     if (!inviteEmail) return;
 
     const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    const inviteLink = `${window.location.origin}/accept-invite?token=${token}`;
+    const inviteLink = `${getInviteBaseUrl()}/accept-invite?token=${token}`;
 
     try {
       const docRef = await addDoc(collection(db, 'invitations'), {
@@ -995,7 +995,7 @@ const OrganizationSettingsView: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           <button 
-                            onClick={() => handleCopyLink(`${window.location.origin}/accept-invite?token=${invite.token}`, invite.id)}
+                            onClick={() => handleCopyLink(`${getInviteBaseUrl()}/accept-invite?token=${invite.token}`, invite.id)}
                             className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
                             title="Copy invitation link directly"
                           >
@@ -1005,7 +1005,7 @@ const OrganizationSettingsView: React.FC = () => {
                           <button 
                             onClick={() => setCreatedInviteModal({
                               email: invite.email,
-                              link: `${window.location.origin}/accept-invite?token=${invite.token}`
+                              link: `${getInviteBaseUrl()}/accept-invite?token=${invite.token}`
                             })}
                             className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
                             title="View Link Popup"

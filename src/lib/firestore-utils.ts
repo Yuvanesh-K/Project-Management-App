@@ -67,6 +67,17 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 // Activity Logging Helper
+export function getInviteBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const origin = window.location.origin;
+    if (origin.includes('aistudio.google.com')) {
+      return 'https://ais-dev-yvatujghraahowhao436vr-650147493611.asia-east1.run.app';
+    }
+    return origin;
+  }
+  return 'https://ais-dev-yvatujghraahowhao436vr-650147493611.asia-east1.run.app';
+}
+
 export async function logActivity(organizationId: string, targetId: string, targetType: string, action: string, details?: string) {
   if (!auth.currentUser) return;
   try {
